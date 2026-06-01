@@ -1,143 +1,122 @@
-# Parallel Ka/Ks Calculator Pipeline
+# Parallel Ka/Ks Calculator Pipeline (YN Model)
 
 ## Overview
 
-This script performs pairwise **Ka/Ks (dN/dS) calculations** for coding sequences using protein-guided codon alignments. It is designed for high-throughput analyses by processing multiple sequence pairs in parallel.
+This script performs high-throughput pairwise **Ka/Ks (dN/dS)** analyses using protein-guided codon alignments and parallel processing.
 
-The workflow:
+For each gene pair, the pipeline:
 
-1. Align protein sequences using MAFFT.
-2. Generate codon alignments using PAL2NAL.
-3. Convert alignments to AXT format using AXTConvertor.
-4. Calculate Ka, Ks, and Ka/Ks using KaKs_Calculator.
-5. Collect results into a tab-delimited output file.
-6. Record failed comparisons in a separate log file.
+1. Aligns protein sequences with MAFFT.
+2. Creates codon alignments using PAL2NAL.
+3. Converts codon alignments to AXT format.
+4. Estimates Ka, Ks, and Ka/Ks values using KaKs_Calculator with the **Yang-Nielsen (YN)** model.
+5. Writes successful results to a tab-delimited output file.
+6. Records failed analyses in a separate log file.
+
+The script is designed to efficiently process thousands of orthologous or paralogous gene pairs on multicore systems.
 
 ---
 
-## Requirements
+# Requirements
 
-### Python
+## Python Packages
 
-* Python ≥ 3.8
-* Biopython
+### Biopython
 
-Install Biopython:
+Install using:
 
 ```bash
 pip install biopython
 ```
 
-### External Programs
+---
 
-The following tools must be installed and accessible:
+## External Software
 
-| Tool            | Purpose                                        |
-| --------------- | ---------------------------------------------- |
-| MAFFT           | Protein sequence alignment                     |
-| PAL2NAL         | Codon alignment generation                     |
-| AXTConvertor    | Conversion of CLUSTAL alignments to AXT format |
-| KaKs_Calculator | Ka/Ks estimation                               |
+The following programs must be installed:
 
-The script expects:
+| Software            | Purpose                        |
+| ------------------- | ------------------------------ |
+| MAFFT               | Protein sequence alignment     |
+| PAL2NAL             | Protein-guided codon alignment |
+| AXTConvertor        | CLUSTAL-to-AXT conversion      |
+| KaKs_Calculator 2.0 | Ka/Ks estimation               |
+
+The script currently expects:
 
 ```python
 MAFFT_BIN = "mafft"
 PAL2NAL_BIN = "pal2nal.pl"
-AXTCONVERT_BIN = "AXTConvertor"
-KAKS_BIN = "KaKs_Calculator"
+
+AXTCONVERT_BIN = "/home/jose/software/kakscalculator2/bin/AXTConvertor"
+KAKS_BIN = "/home/jose/software/kakscalculator2/bin/KaKs_Calculator"
 ```
 
-Either place these executables in your PATH or modify the variables in the script.
+Modify these paths if the software is installed elsewhere.
 
 ---
 
-## Input Files
+# Input Files
 
-### 1. CDS FASTA
+## 1. CDS FASTA
 
-Nucleotide coding sequences.
+Coding nucleotide sequences.
 
 Example:
 
 ```fasta
->gene1
-ATGGCC...
->gene2
-ATGTCC...
+>GeneA
+ATGGCG...
+>GeneB
+ATGCCC...
 ```
 
-### 2. Protein FASTA
+---
+
+## 2. Protein FASTA
 
 Protein translations corresponding to the CDS sequences.
 
 Example:
 
 ```fasta
->gene1
-MAKLV...
->gene2
-MTRLL...
+>GeneA
+MAVKLT...
+>GeneB
+MTRVLL...
 ```
 
-### 3. Pair File
+Sequence identifiers must match those in the CDS FASTA.
 
-Tab- or whitespace-delimited file containing sequence pairs.
+---
+
+## 3. Pair File
+
+Whitespace- or tab-delimited file containing sequence pairs.
 
 Example:
 
 ```text
-gene1 gene2
-gene3 gene4
-gene5 gene6
+GeneA GeneB
+GeneC GeneD
+GeneE GeneF
 ```
 
-Each pair will be analyzed independently.
+Each row represents one Ka/Ks comparison.
 
 ---
 
-## Usage
+# Usage
 
-Basic run:
+## Basic Run
 
 ```bash
 python kaks_parallel.py cds.fa proteins.fa pairs.txt results.tsv
 ```
 
-Using multiple threads:
-
-```bash
-python kaks_parallel.py cds.fa proteins.fa pairs.txt results.tsv \
-    --threads 16
-```
-
-Specify a working directory:
-
-```bash
-python kaks_parallel.py cds.fa proteins.fa pairs.txt results.tsv \
-    --threads 16 \
-    --workdir tmp_kaks
-```
-
-Keep intermediate files:
-
-```bash
-python kaks_parallel.py cds.fa proteins.fa pairs.txt results.tsv \
-    --keep-workdirs
-```
-
 ---
 
-## Command-Line Options
-
-| Option             | Description                          |
-| ------------------ | ------------------------------------ |
-| `-t, --threads`    | Number of parallel workers           |
-| `-w, --workdir`    | Root directory for temporary files   |
-| `--keep-workdirs`  | Keep intermediate alignment files    |
-| `--future-timeout` | Maximum runtime per worker (seconds) |
-
-Example:
+## Run Using Multiple CPU Cores
 
 ```bash
 python kaks_parallel.py \
@@ -145,46 +124,109 @@ python kaks_parallel.py \
     proteins.fa \
     pairs.txt \
     results.tsv \
-    --threads 32 \
-    --workdir work \
+    --threads 16
+```
+
+---
+
+## Specify Working Directory
+
+```bash
+python kaks_parallel.py \
+    cds.fa \
+    proteins.fa \
+    pairs.txt \
+    results.tsv \
+    --workdir temp_work
+```
+
+---
+
+## Keep Intermediate Files
+
+By default, temporary directories are removed after successful completion.
+
+To retain all intermediate alignments and KaKs outputs:
+
+```bash
+python kaks_parallel.py \
+    cds.fa \
+    proteins.fa \
+    pairs.txt \
+    results.tsv \
+    --keep-workdirs
+```
+
+---
+
+## Increase Timeout
+
+Default worker timeout:
+
+```text
+3600 seconds (1 hour)
+```
+
+To allow longer-running jobs:
+
+```bash
+python kaks_parallel.py \
+    cds.fa \
+    proteins.fa \
+    pairs.txt \
+    results.tsv \
     --future-timeout 7200
 ```
 
 ---
 
-## Output
+# Command-Line Arguments
 
-### Main Results File
+| Argument | Description        |
+| -------- | ------------------ |
+| cds      | CDS FASTA file     |
+| prot     | Protein FASTA file |
+| pairs    | Pair list file     |
+| output   | Output TSV file    |
 
-The output TSV contains:
+### Optional Arguments
 
-| Column   | Description                            |
-| -------- | -------------------------------------- |
-| seq1     | First sequence                         |
-| seq2     | Second sequence                        |
-| Ka       | Nonsynonymous substitution rate        |
-| Ks       | Synonymous substitution rate           |
-| Ka/Ks    | Selection ratio                        |
-| P-value  | Statistical significance               |
-| S-sites  | Synonymous sites                       |
-| N-sites  | Nonsynonymous sites                    |
-| Sd       | Synonymous substitutions               |
-| Nd       | Nonsynonymous substitutions            |
-| GC       | GC content                             |
-| ML_Score | Maximum likelihood score               |
-| AICC     | Corrected Akaike Information Criterion |
-| length   | Codon alignment length                 |
+| Option           | Description                                           |
+| ---------------- | ----------------------------------------------------- |
+| -t, --threads    | Number of parallel workers                            |
+| -w, --workdir    | Temporary working directory                           |
+| --keep-workdirs  | Preserve intermediate files                           |
+| --future-timeout | Maximum waiting time (seconds) for a worker to finish |
+
+---
+
+# Output Files
+
+## Main Results File
 
 Example:
 
 ```text
-seq1    seq2    Ka      Ks      Ka/Ks
-gene1   gene2   0.012   0.041   0.293
+seq1    seq2    Ka      Ks      Ka/Ks  P-value S-sites N-sites
+GeneA   GeneB   0.021   0.087   0.241  0.001   221.3   542.1
 ```
+
+### Output Columns
+
+| Column  | Description                     |
+| ------- | ------------------------------- |
+| seq1    | First sequence                  |
+| seq2    | Second sequence                 |
+| Ka      | Nonsynonymous substitution rate |
+| Ks      | Synonymous substitution rate    |
+| Ka/Ks   | Selection ratio                 |
+| P-value | Statistical significance        |
+| S-sites | Number of synonymous sites      |
+| N-sites | Number of nonsynonymous sites   |
 
 ---
 
-### Failed Comparisons
+## Failed Comparisons
 
 Failed analyses are written to:
 
@@ -192,96 +234,108 @@ Failed analyses are written to:
 results.failed.tsv
 ```
 
-Format:
+Example:
 
 ```text
 seq1    seq2    reason
-geneA   geneB   KaKs Error
-geneC   geneD   AXT Error
+GeneX   GeneY   AXT Error
+GeneM   GeneN   KaKs Error
+```
+
+Common reasons include:
+
+* Missing sequences
+* Alignment failures
+* PAL2NAL failures
+* AXT conversion errors
+* KaKs_Calculator failures
+* Worker timeouts
+
+---
+
+# Workflow
+
+For each pair of genes:
+
+## Step 1: Protein Alignment
+
+Protein sequences are aligned with MAFFT:
+
+```bash
+mafft --auto --thread 1 --quiet
 ```
 
 ---
 
-## Pipeline Details
+## Step 2: Codon Alignment
 
-For each sequence pair:
-
-### Step 1: Protein Alignment
-
-```text
-MAFFT
-```
-
-Protein sequences are aligned using:
+Protein alignments are projected back to nucleotide sequences using PAL2NAL:
 
 ```bash
-mafft --auto
+pal2nal.pl alignment.fa cds.fa -output clustal -nogap
 ```
-
-### Step 2: Codon Alignment
-
-```text
-PAL2NAL
-```
-
-Protein alignment is projected back onto CDS sequences:
-
-```bash
-pal2nal.pl -output clustal -nogap
-```
-
-### Step 3: AXT Conversion
-
-```text
-AXTConvertor
-```
-
-Converts CLUSTAL codon alignments to AXT format.
-
-### Step 4: Ka/Ks Estimation
-
-```text
-KaKs_Calculator
-```
-
-The script currently uses:
-
-```python
-KAKS_MODEL = "GY"
-```
-
-which corresponds to the Goldman-Yang model.
 
 ---
 
-## Parallel Processing
+## Step 3: AXT Conversion
 
-The script uses Python's:
+The codon alignment is converted to AXT format:
+
+```bash
+AXTConvertor codon.aln.clustal output.axt
+```
+
+---
+
+## Step 4: Ka/Ks Calculation
+
+KaKs_Calculator is run using the Yang-Nielsen model:
+
+```bash
+KaKs_Calculator -i input.axt -o output.txt -m YN
+```
+
+The YN model is commonly used for pairwise evolutionary analyses and accounts for transition/transversion bias and codon usage.
+
+---
+
+# Parallel Execution
+
+The script uses:
 
 ```python
 ProcessPoolExecutor
 ```
 
-to process sequence pairs concurrently.
+to process multiple gene pairs simultaneously.
 
-Memory usage depends on:
-
-* Number of threads
-* Sequence length
-* Number of simultaneous alignments
-
-For large datasets, use a thread count appropriate for available CPU cores and memory.
+Only a limited number of tasks are submitted at a time, preventing excessive memory consumption when analyzing large datasets.
 
 ---
 
-## Example Workflow
+# Notes
+
+* Protein and CDS FASTA identifiers must match exactly.
+* Duplicate FASTA identifiers are automatically renamed internally.
+* Missing sequences are skipped with a warning.
+* Temporary working directories are deleted automatically unless `--keep-workdirs` is specified.
+* The script is optimized for large-scale ortholog and paralog analyses.
+
+---
+
+# Example
 
 Input pair file:
 
 ```text
-GeneA GeneB
-GeneC GeneD
-GeneE GeneF
+Et_7A_052033    EcDW_7A_809991
+Et_7A_052033    EcDW_7A_810141
+Et_7A_050928    EcDW_7A_934961
+Et_10A_001524   EcDW_10A_1215631
+Et_10A_001524   EcDW_10A_1216561
+Et_10A_001524   EcDW_10A_1216671
+Et_10A_001524   EcDW_10A_1216901
+Et_10A_001524   EcDW_10A_1218641
 ```
 
 Run:
@@ -290,24 +344,18 @@ Run:
 python kaks_parallel.py \
     cds.fa \
     proteins.fa \
-    homolog_pairs.txt \
-    kaks_results.tsv \
-    --threads 20
+    ortholog_pairs.txt \
+    curvula_kaks.tsv \
+    --threads 24
 ```
 
 Output:
 
 ```text
-kaks_results.tsv
-kaks_results.failed.tsv
+curvula_kaks.tsv
+curvula_kaks.failed.tsv
 ```
 
+containing Ka, Ks, and Ka/Ks estimates for all successfully processed gene pairs.
+
 ---
-
-## Notes
-
-* Sequence IDs in CDS and protein FASTA files must match.
-* Duplicate FASTA identifiers are automatically renamed internally.
-* Missing sequences are skipped and reported.
-* Intermediate directories are automatically removed unless `--keep-workdirs` is specified.
-* Alignment length reported in the output corresponds to the PAL2NAL codon alignment length.
